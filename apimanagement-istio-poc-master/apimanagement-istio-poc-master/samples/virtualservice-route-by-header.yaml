@@ -1,0 +1,26 @@
+# virtual service basico que direciona para canary caso tenha o header x-use-canary=true
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: randomapi
+  namespace: randomapi
+spec:
+  hosts:
+  - randomapi
+  http:
+  - match: #IF
+    - headers:
+        x-use-canary:
+            exact: "true"
+    route: #THEN
+    - destination:
+        host: randomapi
+        subset: v2
+      headers: 
+        response:
+          set:
+            canary: v2
+  - route:
+    - destination:
+        host: randomapi
+        subset: v1

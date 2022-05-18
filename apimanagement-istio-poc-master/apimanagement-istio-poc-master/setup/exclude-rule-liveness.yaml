@@ -1,0 +1,23 @@
+spec:
+  match:
+    excludedNamespaces:
+    - ingress-nginx
+    - ingress-nginx-external
+    - monitoring
+    - kube-system
+    - kube-public
+    - kube-node-lease
+    - kube-public
+    - redis-commander
+    - spinnaker
+    - canary-argocd
+    - argocd
+    - acesso-remoto
+    - argo-rollouts
+    - dynatrace
+    - thanos-prd
+    - thanos-hlg
+    - actions-runner-system
+    - cert-manager
+    - keda
+    - istio-system

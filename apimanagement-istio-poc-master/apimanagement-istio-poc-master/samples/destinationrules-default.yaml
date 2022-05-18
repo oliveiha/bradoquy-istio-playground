@@ -1,0 +1,18 @@
+# Regra padrão de roteamento entre os dois serviços fazendo round robin
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: randomapi
+  namespace: randomapi
+spec:
+  host: randomapi
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2

@@ -1,0 +1,24 @@
+# virtual service basico que direciona para o serviço randomAPI v1 fazendo fault injection
+
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: randomapi
+  namespace: randomapi
+spec:
+  hosts:
+  - randomapi
+  http:
+  - route:
+    - destination:
+        host: randomapi
+        subset: v1
+    fault:
+      delay: # 10% das requisições apresentarão delay de 10s
+        fixedDelay: 10s
+        percentage:
+          value: 10
+      abort: # 10% das requisições com retorno de status code 500.
+        httpStatus: 500 
+        percentage:
+          value: 10

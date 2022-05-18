@@ -1,0 +1,213 @@
+export ISTIO_VERSION=1.12.1
+export WORKDIR=/c/Users/robb/istio-multicluster-gke
+export CTX_CLUSTER1=hom-antigo
+export CTX_CLUSTER2=poc
+
+kubectl delete namespace sample istio-system online-boutique --context $CTX_CLUSTER1
+kubectl delete namespace sample istio-system online-boutique --context $CTX_CLUSTER2
+
+for cluster in $(kubectx)
+do
+  kubectl --context $cluster create namespace istio-system
+  kubectl --context $cluster create secret generic cacerts -n istio-system \
+    --from-file=${WORKDIR}/istio-${ISTIO_VERSION}/samples/certs/ca-cert.pem \
+    --from-file=${WORKDIR}/istio-${ISTIO_VERSION}/samples/certs/ca-key.pem \
+    --from-file=${WORKDIR}/istio-${ISTIO_VERSION}/samples/certs/root-cert.pem \
+    --from-file=${WORKDIR}/istio-${ISTIO_VERSION}/samples/certs/cert-chain.pem;
+  done
+
+kubectl --context=${CTX_CLUSTER1} label namespace istio-system topology.istio.io/network=network1
+
+cd ${WORKDIR}
+cat <<EOF > istio-${CTX_CLUSTER1}.yaml
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+spec:
+  meshConfig:
+    accessLogFile: /dev/stdout
+    accessLogEncoding: JSON
+    defaultConfig:
+      proxyMetadata:
+        # Enable basic DNS proxying
+        ISTIO_META_DNS_CAPTURE: "true"
+        # Enable automatic address allocation, optional
+        ISTIO_META_DNS_AUTO_ALLOCATE: "true"
+  values:
+    global:
+      meshID: mesh1
+      multiCluster:
+        clusterName: ${CTX_CLUSTER1}
+      network: network1
+  components:
+    ingressGateways:
+      - name: istio-eastwestgateway
+        label:
+          istio: eastwestgateway
+          app: istio-eastwestgateway
+          topology.istio.io/network: network1
+        enabled: true
+        k8s:
+          env:
+            # sni-dnat adds the clusters required for AUTO_PASSTHROUGH mode
+            - name: ISTIO_META_ROUTER_MODE
+              value: "sni-dnat"
+            # traffic through this gateway should be routed inside the network
+            - name: ISTIO_META_REQUESTED_NETWORK_VIEW
+              value: network1
+          serviceAnnotations:
+            service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+          service:
+            ports:
+              - name: status-port
+                port: 15021
+                targetPort: 15021
+              - name: tls
+                port: 15443
+                targetPort: 15443
+              - name: tls-istiod
+                port: 15012
+                targetPort: 15012
+              - name: tls-webhook
+                port: 15017
+                targetPort: 15017
+EOF
+
+istioctl install --context=${CTX_CLUSTER1} -f istio-${CTX_CLUSTER1}.yaml -y
+
+kubectl --context=${CTX_CLUSTER1} apply -n istio-system -f \
+${WORKDIR}/istio-${ISTIO_VERSION}/samples/multicluster/expose-services.yaml
+
+kubectl --context=${CTX_CLUSTER2} label namespace istio-system topology.istio.io/network=network2
+
+cd ${WORKDIR}
+cat <<EOF > istio-${CTX_CLUSTER2}.yaml
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+spec:
+  meshConfig:
+    accessLogFile: /dev/stdout
+    accessLogEncoding: JSON
+    defaultConfig:
+      proxyMetadata:
+        # Enable basic DNS proxying
+        ISTIO_META_DNS_CAPTURE: "true"
+        # Enable automatic address allocation, optional
+        ISTIO_META_DNS_AUTO_ALLOCATE: "true"
+  values:
+    global:
+      meshID: mesh1
+      multiCluster:
+        clusterName: ${CTX_CLUSTER2}
+      network: network2
+  components:
+    ingressGateways:
+      - name: istio-eastwestgateway
+        label:
+          istio: eastwestgateway
+          app: istio-eastwestgateway
+          topology.istio.io/network: network2
+        enabled: true
+        k8s:
+          env:
+            # sni-dnat adds the clusters required for AUTO_PASSTHROUGH mode
+            - name: ISTIO_META_ROUTER_MODE
+              value: "sni-dnat"
+            # traffic through this gateway should be routed inside the network
+            - name: ISTIO_META_REQUESTED_NETWORK_VIEW
+              value: network2
+          serviceAnnotations:
+            service.beta.kubernetes.io/azure-load-balancer-internal: "true"
+          service:
+            ports:
+              - name: status-port
+                port: 15021
+                targetPort: 15021
+              - name: tls
+                port: 15443
+                targetPort: 15443
+              - name: tls-istiod
+                port: 15012
+                targetPort: 15012
+              - name: tls-webhook
+                port: 15017
+                targetPort: 15017
+EOF
+
+istioctl install --context=${CTX_CLUSTER2} -f istio-${CTX_CLUSTER2}.yaml -y
+
+kubectl --context=${CTX_CLUSTER2} apply -n istio-system -f \
+${WORKDIR}/istio-${ISTIO_VERSION}/samples/multicluster/expose-services.yaml
+
+istioctl x create-remote-secret \
+--context=${CTX_CLUSTER1} \
+--name=${CTX_CLUSTER1} | \
+kubectl apply -f - --context=${CTX_CLUSTER2}
+
+istioctl x create-remote-secret \
+--context=${CTX_CLUSTER2} \
+--name=${CTX_CLUSTER2} | \
+kubectl apply -f - --context=${CTX_CLUSTER1}
+
+## Example 1
+
+kubectl --context ${CTX_CLUSTER2} create namespace online-boutique
+kubectl --context ${CTX_CLUSTER1} create namespace online-boutique
+
+kubectl --context ${CTX_CLUSTER2} label namespace online-boutique istio-injection=enabled
+kubectl --context ${CTX_CLUSTER1} label namespace online-boutique istio-injection=enabled
+
+kubectl --context ${CTX_CLUSTER1} -n online-boutique apply -f $WORKDIR/istio-multi-primary/central
+kubectl --context ${CTX_CLUSTER2} -n online-boutique apply -f $WORKDIR/istio-multi-primary/west
+
+kubectl --context ${CTX_CLUSTER1} apply -f ${WORKDIR}/istio-${ISTIO_VERSION}/samples/addons/prometheus.yaml
+kubectl --context ${CTX_CLUSTER1} apply -f ${WORKDIR}/istio-${ISTIO_VERSION}/samples/addons/kiali.yaml
+
+## Example 2
+
+kubectl create --context="${CTX_CLUSTER1}" namespace sample
+kubectl create --context="${CTX_CLUSTER2}" namespace sample
+
+kubectl label --context="${CTX_CLUSTER1}" namespace sample \
+    istio-injection=enabled
+kubectl label --context="${CTX_CLUSTER2}" namespace sample \
+    istio-injection=enabled
+
+kubectl apply --context="${CTX_CLUSTER1}" \
+    -f ${WORKDIR}/istio-${ISTIO_VERSION}/samples/helloworld/helloworld.yaml \
+    -l service=helloworld -n sample
+kubectl apply --context="${CTX_CLUSTER2}" \
+    -f ${WORKDIR}/istio-${ISTIO_VERSION}/samples/helloworld/helloworld.yaml \
+    -l service=helloworld -n sample
+
+kubectl apply --context="${CTX_CLUSTER1}" \
+    -f ${WORKDIR}/istio-${ISTIO_VERSION}/samples/helloworld/helloworld.yaml \
+    -l version=v1 -n sample
+
+kubectl apply --context="${CTX_CLUSTER2}" \
+    -f ${WORKDIR}/istio-${ISTIO_VERSION}/samples/helloworld/helloworld.yaml \
+    -l version=v2 -n sample
+
+kubectl apply --context="${CTX_CLUSTER1}" \
+    -f ${WORKDIR}/istio-${ISTIO_VERSION}/samples/sleep/sleep.yaml -n sample
+kubectl apply --context="${CTX_CLUSTER2}" \
+    -f ${WORKDIR}/istio-${ISTIO_VERSION}/samples/sleep/sleep.yaml -n sample
+
+kubectl exec --context="${CTX_CLUSTER1}" -n sample -c sleep \
+    "$(kubectl get pod --context="${CTX_CLUSTER1}" -n sample -l \
+    app=sleep -o jsonpath='{.items[0].metadata.name}')" \
+    -- curl -sS helloworld.sample:5000/hello
+
+
+kubectl exec --context="${CTX_CLUSTER1}" -n sample -c sleep \
+    "$(kubectl get pod --context="${CTX_CLUSTER1}" -n sample -l \
+    app=sleep -o jsonpath='{.items[0].metadata.name}')" \
+    -- curl -v address.internal
+
+
+
+
+
+istioctl.exe dashboard kiali --context $CTX_CLUSTER1
+
+
+

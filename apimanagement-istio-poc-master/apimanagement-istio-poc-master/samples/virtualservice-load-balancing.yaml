@@ -1,0 +1,20 @@
+# virtual service basico que faz load balancer entre as duas versões (90% - 10%)
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: randomapi
+  namespace: randomapi
+spec:
+  hosts:
+  - randomapi
+  http:
+  - route:
+    - destination:
+        host: randomapi
+        subset: v1
+      weight: 90
+    - destination:
+        host: randomapi
+        subset: v2
+      weight: 10
+

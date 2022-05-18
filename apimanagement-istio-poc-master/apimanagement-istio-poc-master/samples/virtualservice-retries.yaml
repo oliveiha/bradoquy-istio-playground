@@ -1,0 +1,24 @@
+# virtual service com politica de retentativa. 3 retentativas em 1 segundo
+# https://istio.io/latest/docs/reference/config/networking/virtual-service/#HTTPRetry
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: randomapi
+  namespace: randomapi
+spec:
+  hosts:
+  - randomapi
+  http:
+  - route:
+    - destination:
+        host: randomapi
+        subset: v1
+      weight: 0
+    - destination:
+        host: randomapi
+        subset: v2
+      weight: 100
+    retries:
+      attempts: 3
+      perTryTimeout: 1s
+      retryOn: connect-failure,refused-stream,500 #outras politicas podem ser aplicadas aqui 

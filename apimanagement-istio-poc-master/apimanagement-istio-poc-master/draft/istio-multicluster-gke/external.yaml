@@ -1,0 +1,12 @@
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: helloworld-sample-c1
+  namespace: sample
+spec:
+  addresses:
+  - 10.109.2.123
+  hosts:
+  - helloworld.sample.global
+  location: MESH_INTERNAL
+  resolution: STATIC  

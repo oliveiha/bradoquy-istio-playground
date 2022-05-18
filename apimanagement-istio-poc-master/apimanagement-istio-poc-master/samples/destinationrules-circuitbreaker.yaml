@@ -1,0 +1,25 @@
+# Configura um circuitbeaker para 1 erro consecutivo em 1s. Se esta condição ocorrer, deixa o pod fora do balance por 3 minutos
+
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: randomapi
+  namespace: randomapi
+spec:
+  host: randomapi
+  trafficPolicy:
+    loadBalancer:
+      simple: RANDOM
+    outlierDetection:
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 3m
+      maxEjectionPercent: 100
+
+  subsets:
+  - name: v1
+    labels:
+      version: v1
+  - name: v2
+    labels:
+      version: v2

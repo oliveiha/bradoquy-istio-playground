@@ -1,0 +1,223 @@
+#Manifesto dos arquivos da aplicação
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: randomapi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: randomapi-v1
+    version: v1
+  name: randomapi-v1
+  namespace: randomapi
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: randomapi
+      version: v1
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: randomapi
+        version: v1
+    spec:
+      containers:
+      - image: <add repo>
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 80
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
+        name: randomapi
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 80
+            scheme: HTTP
+          periodSeconds: 20
+          successThreshold: 3
+          timeoutSeconds: 2
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /app/plan.json
+          name: planjsonvol
+          subPath: plan.json
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: plan-config-v1
+        name: planjsonvol
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: plan-config-v1
+  namespace: randomapi
+data:
+    plan.json: |-
+      {
+        "Responses":[
+          {
+            "Count":100,
+            "Response":{
+              "Weight":1,
+              "Status":200,
+              "Body":"{'status': 'success'}",
+              "Time":0
+            }
+          }
+        ],
+        "Id":"00000000-0000-0000-0000-000000000001"
+      }
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: randomapi
+    version: v2
+  name: randomapi-v2
+  namespace: randomapi
+spec:
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: randomapi
+      version: v2
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: randomapi
+        version: v2
+    spec:
+      containers:
+      - image: harbor01.bradoquy.com.br/apix/apimanagement-randomapi
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 80
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 2
+        name: randomapi
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 80
+            scheme: HTTP
+          periodSeconds: 20
+          successThreshold: 3
+          timeoutSeconds: 2
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /app/plan.json
+          name: planjsonvol
+          subPath: plan.json
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: plan-config-v2
+        name: planjsonvol
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: plan-config-v2
+  namespace: randomapi
+data:
+    plan.json: |-
+             {
+              "Responses": [
+                {
+                  "Count": 2,
+                  "Response": {
+                    "Weight": 1,
+                    "Status": 500,
+                    "Body": "{'status': 'failure', 'canary': true}",
+                    "Time": 0
+                  }
+                },
+                {
+                  "Count": 4,
+                  "Response": {
+                    "Weight": 1,
+                    "Status": 200,
+                    "Body": "{'status': 'success', 'canary': true}",
+                    "Time": 0
+                  }
+                }
+              ],
+              "Id": "00000000-0000-0000-0000-000000000001"
+              }
+
+---
+
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: randomapi
+  name: randomapi
+  namespace: randomapi
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+    name: http
+  selector:
+    app: randomapi
+  type: ClusterIP
