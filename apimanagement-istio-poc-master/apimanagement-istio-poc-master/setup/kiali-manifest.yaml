@@ -482,7 +482,7 @@ spec:
       nodeSelector:
           $NODE_SELECTOR_KEY_VALUE
       containers:
-      - image: "harbor01.viavarejo.com.br/apimanagement/istio/kiali:v1.42"
+      - image: "quay.io/kiali/kiali:v1.45"
         imagePullPolicy: Always
         name: kiali
         command:

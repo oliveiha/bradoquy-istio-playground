@@ -22,7 +22,7 @@ spec:
         $NODE_SELECTOR_KEY_VALUE
       containers:
         - name: jaeger
-          image: <add repo>
+          image: jaegertracing/all-in-one:1.23.0
           env:
             - name: BADGER_EPHEMERAL
               value: "false"

@@ -2,7 +2,7 @@ apiVersion: install.istio.io/v1alpha1
 kind: IstioOperator
 spec:
   profile: default
-  hub: <add docker hub>
+  hub: istio
   tag: 1.12.1
   meshConfig:
     enablePrometheusMerge: true
